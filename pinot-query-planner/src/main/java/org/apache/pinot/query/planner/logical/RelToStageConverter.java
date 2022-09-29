@@ -31,6 +31,7 @@ import org.apache.calcite.rel.logical.LogicalJoin;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalSort;
 import org.apache.calcite.rel.logical.LogicalTableScan;
+import org.apache.calcite.rel.logical.LogicalValues;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rel.type.RelRecordType;
@@ -45,6 +46,7 @@ import org.apache.pinot.query.planner.stage.ProjectNode;
 import org.apache.pinot.query.planner.stage.SortNode;
 import org.apache.pinot.query.planner.stage.StageNode;
 import org.apache.pinot.query.planner.stage.TableScanNode;
+import org.apache.pinot.query.planner.stage.ValueNode;
 
 
 /**
@@ -77,14 +79,20 @@ public final class RelToStageConverter {
       return convertLogicalAggregate((LogicalAggregate) node, currentStageId);
     } else if (node instanceof LogicalSort) {
       return convertLogicalSort((LogicalSort) node, currentStageId);
+    } else if (node instanceof LogicalValues) {
+      return convertLogicalValues((LogicalValues) node, currentStageId);
     } else {
-        throw new UnsupportedOperationException("Unsupported logical plan node: " + node);
+      throw new UnsupportedOperationException("Unsupported logical plan node: " + node);
     }
   }
 
+  private static StageNode convertLogicalValues(LogicalValues node, int currentStageId) {
+    return new ValueNode(currentStageId, toDataSchema(node.getRowType()), node.tuples);
+  }
+
   private static StageNode convertLogicalSort(LogicalSort node, int currentStageId) {
-    int fetch = node.fetch == null ? -1 : ((RexLiteral) node.fetch).getValueAs(Integer.class);
-    int offset = node.offset == null ? -1 : ((RexLiteral) node.offset).getValueAs(Integer.class);
+    int fetch = node.fetch == null ? 0 : ((RexLiteral) node.fetch).getValueAs(Integer.class);
+    int offset = node.offset == null ? 0 : ((RexLiteral) node.offset).getValueAs(Integer.class);
     return new SortNode(currentStageId, node.getCollation().getFieldCollations(), fetch, offset,
         toDataSchema(node.getRowType()));
   }

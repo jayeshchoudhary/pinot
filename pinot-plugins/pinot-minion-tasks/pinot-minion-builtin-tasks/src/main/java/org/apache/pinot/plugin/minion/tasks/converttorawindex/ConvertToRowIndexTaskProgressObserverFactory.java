@@ -16,27 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.plugin.stream.kafka20;
+package org.apache.pinot.plugin.minion.tasks.converttorawindex;
 
-import java.nio.ByteBuffer;
-import org.apache.pinot.plugin.stream.kafka.MessageAndOffset;
-import org.apache.pinot.spi.stream.RowMetadata;
+import org.apache.pinot.core.common.MinionConstants;
+import org.apache.pinot.minion.event.BaseMinionProgressObserverFactory;
+import org.apache.pinot.spi.annotations.minion.EventObserverFactory;
 
 
-public class MessageAndOffsetAndMetadata extends MessageAndOffset {
-  private final RowMetadata _rowMetadata;
+@EventObserverFactory
+public class ConvertToRowIndexTaskProgressObserverFactory extends BaseMinionProgressObserverFactory {
 
-  public MessageAndOffsetAndMetadata(byte[] message, long offset, RowMetadata rowMetadata) {
-    super(message, offset);
-    _rowMetadata = rowMetadata;
-  }
-
-  public MessageAndOffsetAndMetadata(ByteBuffer message, long offset, RowMetadata rowMetadata) {
-    super(message, offset);
-    _rowMetadata = rowMetadata;
-  }
-
-  public RowMetadata getRowMetadata() {
-    return _rowMetadata;
+  @Override
+  public String getTaskType() {
+    return MinionConstants.ConvertToRawIndexTask.TASK_TYPE;
   }
 }

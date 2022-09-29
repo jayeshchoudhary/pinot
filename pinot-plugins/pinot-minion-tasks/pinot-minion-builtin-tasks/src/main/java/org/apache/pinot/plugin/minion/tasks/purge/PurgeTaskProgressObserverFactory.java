@@ -16,38 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.plugin.stream.kafka;
+package org.apache.pinot.plugin.minion.tasks.purge;
 
-import java.nio.ByteBuffer;
+import org.apache.pinot.core.common.MinionConstants;
+import org.apache.pinot.minion.event.BaseMinionProgressObserverFactory;
+import org.apache.pinot.spi.annotations.minion.EventObserverFactory;
 
 
-public class MessageAndOffset {
+@EventObserverFactory
+public class PurgeTaskProgressObserverFactory extends BaseMinionProgressObserverFactory {
 
-  private ByteBuffer _message;
-  private long _offset;
-
-  public MessageAndOffset(byte[] message, long offset) {
-    this(ByteBuffer.wrap(message), offset);
-  }
-
-  public MessageAndOffset(ByteBuffer message, long offset) {
-    _message = message;
-    _offset = offset;
-  }
-
-  public ByteBuffer getMessage() {
-    return _message;
-  }
-
-  public long getOffset() {
-    return _offset;
-  }
-
-  public long getNextOffset() {
-    return getOffset() + 1;
-  }
-
-  public int payloadSize() {
-    return getMessage().array().length;
+  @Override
+  public String getTaskType() {
+    return MinionConstants.PurgeTask.TASK_TYPE;
   }
 }

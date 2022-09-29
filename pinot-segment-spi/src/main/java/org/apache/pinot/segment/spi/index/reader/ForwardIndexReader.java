@@ -322,14 +322,14 @@ public interface ForwardIndexReader<T extends ForwardIndexReaderContext> extends
           values[i] = BigDecimal.valueOf(getDouble(docIds[i], context));
         }
         break;
-      case STRING:
-        for (int i = 0; i < length; i++) {
-          values[i] = new BigDecimal(getString(docIds[i], context));
-        }
-        break;
       case BIG_DECIMAL:
         for (int i = 0; i < length; i++) {
           values[i] = getBigDecimal(docIds[i], context);
+        }
+        break;
+      case STRING:
+        for (int i = 0; i < length; i++) {
+          values[i] = new BigDecimal(getString(docIds[i], context));
         }
         break;
       case BYTES:
@@ -720,6 +720,20 @@ public interface ForwardIndexReader<T extends ForwardIndexReaderContext> extends
         break;
       default:
         throw new IllegalArgumentException("readValuesMV not supported for type " + getStoredType());
+    }
+  }
+
+  /**
+   * Fills the values
+   * @param docIds Array containing the document ids to read
+   * @param length Number of values to read
+   * @param maxNumValuesPerMVEntry Maximum number of values per MV entry
+   * @param values Values to fill
+   * @param context Reader context
+   */
+  default void readValuesMV(int[] docIds, int length, int maxNumValuesPerMVEntry, byte[][][] values, T context) {
+    for (int i = 0; i < length; i++) {
+      values[i] = getBytesMV(docIds[i], context);
     }
   }
 

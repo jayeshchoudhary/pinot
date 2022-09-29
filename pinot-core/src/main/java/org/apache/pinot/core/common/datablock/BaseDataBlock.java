@@ -86,6 +86,7 @@ public abstract class BaseDataBlock implements DataTable {
 
   protected int _numRows;
   protected int _numColumns;
+  protected int _fixDataSize;
   protected DataSchema _dataSchema;
   protected String[] _stringDictionary;
   protected byte[] _fixedSizeDataBytes;
@@ -107,6 +108,7 @@ public abstract class BaseDataBlock implements DataTable {
     _numRows = numRows;
     _dataSchema = dataSchema;
     _numColumns = dataSchema == null ? 0 : dataSchema.size();
+    _fixDataSize = 0;
     _stringDictionary = stringDictionary;
     _fixedSizeDataBytes = fixedSizeDataBytes;
     _fixedSizeData = ByteBuffer.wrap(fixedSizeDataBytes);
@@ -122,6 +124,7 @@ public abstract class BaseDataBlock implements DataTable {
   public BaseDataBlock() {
     _numRows = 0;
     _numColumns = 0;
+    _fixDataSize = 0;
     _dataSchema = null;
     _stringDictionary = null;
     _fixedSizeDataBytes = null;
@@ -147,7 +150,6 @@ public abstract class BaseDataBlock implements DataTable {
     int fixedSizeDataLength = byteBuffer.getInt();
     int variableSizeDataStart = byteBuffer.getInt();
     int variableSizeDataLength = byteBuffer.getInt();
-
 
     // Read exceptions.
     if (exceptionsLength != 0) {
@@ -246,12 +248,6 @@ public abstract class BaseDataBlock implements DataTable {
     return _numRows;
   }
 
-  @Nullable
-  @Override
-  public RoaringBitmap getNullRowIds(int colId) {
-    return null;
-  }
-
   // --------------------------------------------------------------------------
   // Fixed sized element access.
   // --------------------------------------------------------------------------
@@ -302,19 +298,6 @@ public abstract class BaseDataBlock implements DataTable {
   // --------------------------------------------------------------------------
 
   @Override
-  public <T> T getObject(int rowId, int colId) {
-    int size = positionOffsetInVariableBufferAndGetLength(rowId, colId);
-    int objectTypeValue = _variableSizeData.getInt();
-    if (size == 0) {
-      assert objectTypeValue == ObjectSerDeUtils.ObjectType.Null.getValue();
-      return null;
-    }
-    ByteBuffer byteBuffer = _variableSizeData.slice();
-    byteBuffer.limit(size);
-    return ObjectSerDeUtils.deserialize(byteBuffer, objectTypeValue);
-  }
-
-  @Override
   public int[] getIntArray(int rowId, int colId) {
     int length = positionOffsetInVariableBufferAndGetLength(rowId, colId);
     int[] ints = new int[length];
@@ -362,6 +345,41 @@ public abstract class BaseDataBlock implements DataTable {
       strings[i] = _stringDictionary[_variableSizeData.getInt()];
     }
     return strings;
+  }
+
+  @Nullable
+  @Override
+  public CustomObject getCustomObject(int rowId, int colId) {
+    int size = positionOffsetInVariableBufferAndGetLength(rowId, colId);
+    int type = _variableSizeData.getInt();
+    if (size == 0) {
+      assert type == ObjectSerDeUtils.NULL_TYPE_VALUE;
+      return null;
+    }
+    ByteBuffer buffer = _variableSizeData.slice();
+    buffer.limit(size);
+    return new CustomObject(type, buffer);
+  }
+
+  @Nullable
+  @Override
+  public RoaringBitmap getNullRowIds(int colId) {
+    // _fixedSizeData stores two ints per col's null bitmap: offset, and length.
+    int position = _fixDataSize + colId * Integer.BYTES * 2;
+    if (_fixedSizeData == null || position >= _fixedSizeData.limit()) {
+      return null;
+    }
+    _fixedSizeData.position(position);
+    int offset = _fixedSizeData.getInt();
+    int bytesLength = _fixedSizeData.getInt();
+    if (bytesLength > 0) {
+      _variableSizeData.position(offset);
+      byte[] nullBitmapBytes = new byte[bytesLength];
+      _variableSizeData.get(nullBitmapBytes);
+      return ObjectSerDeUtils.ROARING_BITMAP_SER_DE.deserialize(nullBitmapBytes);
+    } else {
+      return null;
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -627,7 +645,7 @@ public abstract class BaseDataBlock implements DataTable {
     }
 
     StringBuilder stringBuilder = new StringBuilder();
-    stringBuilder.append(_dataSchema.toString()).append('\n');
+    stringBuilder.append(_dataSchema).append('\n');
     stringBuilder.append("numRows: ").append(_numRows).append('\n');
 
     DataSchema.ColumnDataType[] storedColumnDataTypes = _dataSchema.getStoredColumnDataTypes();

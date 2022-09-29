@@ -16,18 +16,18 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.apache.pinot.plugin.stream.kafka20;
+package org.apache.pinot.plugin.minion.tasks.mergerollup;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.pinot.spi.stream.RowMetadata;
-import org.apache.pinot.spi.stream.StreamMessageMetadata;
+import org.apache.pinot.core.common.MinionConstants;
+import org.apache.pinot.minion.event.BaseMinionProgressObserverFactory;
+import org.apache.pinot.spi.annotations.minion.EventObserverFactory;
 
 
-@FunctionalInterface
-public interface RowMetadataExtractor {
-  static RowMetadataExtractor build(boolean populateMetadata) {
-    return populateMetadata ? record -> new StreamMessageMetadata(record.timestamp()) : record -> null;
+@EventObserverFactory
+public class MergeRollupTaskProgressObserverFactory extends BaseMinionProgressObserverFactory {
+
+  @Override
+  public String getTaskType() {
+    return MinionConstants.MergeRollupTask.TASK_TYPE;
   }
-
-  RowMetadata extract(ConsumerRecord<?, ?> consumerRecord);
 }

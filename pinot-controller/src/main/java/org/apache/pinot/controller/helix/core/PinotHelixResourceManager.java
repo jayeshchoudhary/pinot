@@ -28,7 +28,9 @@ import com.google.common.collect.HashBiMap;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -41,7 +43,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -182,7 +183,8 @@ public class PinotHelixResourceManager {
   public static final long SEGMENT_CLEANUP_TIMEOUT_MS = 20 * 60_000L; // 20 minutes
   public static final long SEGMENT_CLEANUP_CHECK_INTERVAL_MS = 1_000L; // 1 second
 
-  private static final SimpleDateFormat SIMPLE_DATE_FORMAT = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'");
+  private static final DateTimeFormatter SIMPLE_DATE_FORMAT =
+      DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
 
   private final Map<String, Map<String, Long>> _segmentCrcMap = new HashMap<>();
   private final Map<String, Map<String, Integer>> _lastKnownSegmentMetadataVersionMap = new HashMap<>();
@@ -231,7 +233,6 @@ public class PinotHelixResourceManager {
     for (int i = 0; i < _tableUpdaterLocks.length; i++) {
       _tableUpdaterLocks[i] = new Object();
     }
-    SIMPLE_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
   }
 
   public PinotHelixResourceManager(ControllerConf controllerConf) {
@@ -401,6 +402,11 @@ public class PinotHelixResourceManager {
   public List<InstanceConfig> getAllControllerInstanceConfigs() {
     return HelixHelper.getInstanceConfigs(_helixZkManager).stream()
         .filter(instance -> InstanceTypeUtils.isController(instance.getId())).collect(Collectors.toList());
+  }
+
+  public List<InstanceConfig> getAllMinionInstanceConfigs() {
+    return HelixHelper.getInstanceConfigs(_helixZkManager).stream()
+        .filter(instance -> InstanceTypeUtils.isMinion(instance.getId())).collect(Collectors.toList());
   }
 
   /**
@@ -1258,7 +1264,7 @@ public class PinotHelixResourceManager {
    * Schema APIs
    */
 
-  public void addSchema(Schema schema, boolean override)
+  public void addSchema(Schema schema, boolean override, boolean force)
       throws SchemaAlreadyExistsException, SchemaBackwardIncompatibleException {
     String schemaName = schema.getSchemaName();
     LOGGER.info("Adding schema: {} with override: {}", schemaName, override);
@@ -1267,7 +1273,7 @@ public class PinotHelixResourceManager {
     if (oldSchema != null) {
       // Update existing schema
       if (override) {
-        updateSchema(schema, oldSchema);
+        updateSchema(schema, oldSchema, force);
       } else {
         throw new SchemaAlreadyExistsException(String.format("Schema: %s already exists", schemaName));
       }
@@ -1288,7 +1294,7 @@ public class PinotHelixResourceManager {
       throw new SchemaNotFoundException(String.format("Schema: %s does not exist", schemaName));
     }
 
-    updateSchema(schema, oldSchema);
+    updateSchema(schema, oldSchema, false);
 
     if (reload) {
       LOGGER.info("Reloading tables with name: {}", schemaName);
@@ -1303,7 +1309,7 @@ public class PinotHelixResourceManager {
    * Helper method to update the schema, or throw SchemaBackwardIncompatibleException when the new schema is not
    * backward-compatible with the existing schema.
    */
-  private void updateSchema(Schema schema, Schema oldSchema)
+  private void updateSchema(Schema schema, Schema oldSchema, boolean force)
       throws SchemaBackwardIncompatibleException {
     String schemaName = schema.getSchemaName();
     schema.updateBooleanFieldsIfNeeded(oldSchema);
@@ -1311,10 +1317,15 @@ public class PinotHelixResourceManager {
       LOGGER.info("New schema: {} is the same as the existing schema, not updating it", schemaName);
       return;
     }
-    if (!schema.isBackwardCompatibleWith(oldSchema)) {
-      // TODO: Add the reason of the incompatibility
-      throw new SchemaBackwardIncompatibleException(
-          String.format("New schema: %s is not backward-compatible with the existing schema", schemaName));
+    boolean isBackwardCompatible = schema.isBackwardCompatibleWith(oldSchema);
+    if (!isBackwardCompatible) {
+      if (force) {
+        LOGGER.warn("Force updated schema: {} which is backward incompatible with the existing schema", oldSchema);
+      } else {
+        // TODO: Add the reason of the incompatibility
+        throw new SchemaBackwardIncompatibleException(
+                String.format("New schema: %s is not backward-compatible with the existing schema", schemaName));
+      }
     }
     ZKMetadataProvider.setSchema(_propertyStore, schema);
     LOGGER.info("Updated schema: {}", schemaName);
@@ -3598,7 +3609,7 @@ public class PinotHelixResourceManager {
     String zkPath = ZKMetadataProvider.constructPropertyStorePathForResourceConfig(tableNameWithType);
     Stat stat = _propertyStore.getStat(zkPath, AccessOption.PERSISTENT);
     Preconditions.checkState(stat != null, "Failed to read ZK stats for table: %s", tableNameWithType);
-    String creationTime = SIMPLE_DATE_FORMAT.format(stat.getCtime());
+    String creationTime = SIMPLE_DATE_FORMAT.format(Instant.ofEpochMilli(stat.getCtime()));
     return new TableStats(creationTime);
   }
 

@@ -39,53 +39,52 @@ public abstract class FilterOperand extends TransformOperand {
         return new Or(functionCall.getFunctionOperands(), dataSchema);
       case "NOT":
         return new Not(toFilterOperand(functionCall.getFunctionOperands().get(0), dataSchema));
-      case "EQ":
+      case "equals":
         return new Predicate(functionCall.getFunctionOperands(), dataSchema) {
           @Override
           public Boolean apply(Object[] row) {
-            return ((Comparable) _lhs._resultType.convert(_lhs.apply(row))).compareTo(
-                _lhs._resultType.convert(_rhs.apply(row))) == 0;
+            return ((Comparable) _resultType.convert(_lhs.apply(row))).compareTo(
+                _resultType.convert(_rhs.apply(row))) == 0;
           }
         };
-      case "NE":
-      case "NE2":
+      case "notEquals":
         return new Predicate(functionCall.getFunctionOperands(), dataSchema) {
           @Override
           public Boolean apply(Object[] row) {
-            return ((Comparable) _lhs._resultType.convert(_lhs.apply(row))).compareTo(
-                _lhs._resultType.convert(_rhs.apply(row))) != 0;
+            return ((Comparable) _resultType.convert(_lhs.apply(row))).compareTo(
+                _resultType.convert(_rhs.apply(row))) != 0;
           }
         };
-      case "GT":
+      case "greaterThan":
         return new Predicate(functionCall.getFunctionOperands(), dataSchema) {
           @Override
           public Boolean apply(Object[] row) {
-            return ((Comparable) _lhs._resultType.convert(_lhs.apply(row))).compareTo(
-                _lhs._resultType.convert(_rhs.apply(row))) > 0;
+            return ((Comparable) _resultType.convert(_lhs.apply(row))).compareTo(
+                _resultType.convert(_rhs.apply(row))) > 0;
           }
         };
-      case "GE":
+      case "greaterThanOrEqual":
         return new Predicate(functionCall.getFunctionOperands(), dataSchema) {
           @Override
           public Boolean apply(Object[] row) {
-            return ((Comparable) _lhs._resultType.convert(_lhs.apply(row))).compareTo(
-                _lhs._resultType.convert(_rhs.apply(row))) >= 0;
+            return ((Comparable) _resultType.convert(_lhs.apply(row))).compareTo(
+                _resultType.convert(_rhs.apply(row))) >= 0;
           }
         };
-      case "LT":
+      case "lessThan":
         return new Predicate(functionCall.getFunctionOperands(), dataSchema) {
           @Override
           public Boolean apply(Object[] row) {
-            return ((Comparable) _lhs._resultType.convert(_lhs.apply(row))).compareTo(
-                _lhs._resultType.convert(_rhs.apply(row))) < 0;
+            return ((Comparable) _resultType.convert(_lhs.apply(row))).compareTo(
+                _resultType.convert(_rhs.apply(row))) < 0;
           }
         };
-      case "LE":
+      case "lessThanOrEqual":
         return new Predicate(functionCall.getFunctionOperands(), dataSchema) {
           @Override
           public Boolean apply(Object[] row) {
-            return ((Comparable) _lhs._resultType.convert(_lhs.apply(row))).compareTo(
-                _lhs._resultType.convert(_rhs.apply(row))) <= 0;
+            return ((Comparable) _resultType.convert(_lhs.apply(row))).compareTo(
+                _resultType.convert(_rhs.apply(row))) <= 0;
           }
         };
       default:
@@ -151,10 +150,20 @@ public abstract class FilterOperand extends TransformOperand {
   private static abstract class Predicate extends FilterOperand {
     protected final TransformOperand _lhs;
     protected final TransformOperand _rhs;
+    protected final DataSchema.ColumnDataType _resultType;
 
     public Predicate(List<RexExpression> functionOperands, DataSchema dataSchema) {
       _lhs = TransformOperand.toTransformOperand(functionOperands.get(0), dataSchema);
       _rhs = TransformOperand.toTransformOperand(functionOperands.get(1), dataSchema);
+      if (_lhs._resultType != null && _lhs._resultType != DataSchema.ColumnDataType.OBJECT) {
+        _resultType = _lhs._resultType;
+      } else if (_rhs._resultType != null && _rhs._resultType != DataSchema.ColumnDataType.OBJECT) {
+        _resultType = _rhs._resultType;
+      } else {
+        // TODO: we should correctly throw exception here. Currently exception thrown during constructor is not
+        // piped back to query dispatcher, thus we set it to null and deliberately make the processing throw exception.
+        _resultType = null;
+      }
     }
   }
 }
